@@ -1,0 +1,8 @@
+﻿__pycache__/
+*.pyc
+__runner__.py
+__payload__.json
+.env
+.env.*
+.vscode/
+.idea/
