@@ -11,47 +11,61 @@ def _score(name:str)->int:
     return s
 
 def _invoke(fn, payload):
-    # 1) ลองเรียกด้วย payload เดิมก่อน
-    try:
+    # ถ้ามี payload['data'] ให้พยายามแปลงเป็น DataFrame ก่อน
+    df = None
+    if isinstance(payload, dict) and 'data' in payload:
         try:
-            res = fn(payload)
-        except TypeError:
-            res = fn()
-    except AttributeError as e:
-        msg = str(e).lower()
-        # 2) ถ้า error บอกว่าไม่มี .columns แปลว่าควรเป็น DataFrame
-        if 'columns' in msg:
-            # แปลง payload -> DataFrame ตามที่มี
-            df = None
-            if isinstance(payload, dict) and 'data' in payload:
+            d = payload['data']
+            if isinstance(d, list):
+                df = pd.DataFrame(d)
+            elif isinstance(d, dict):
                 try:
-                    if isinstance(payload['data'], list):
-                        df = pd.DataFrame(payload['data'])
-                    elif isinstance(payload['data'], dict):
-                        df = pd.DataFrame([payload['data']])
+                    df = pd.DataFrame(d)
                 except Exception:
-                    df = None
-            if df is None:
-                # อย่างน้อยเป็น DataFrame ว่างเพื่อไม่ให้พังเรื่อง .columns
-                df = pd.DataFrame()
-            # เรียกใหม่ด้วย df
-            try:
-                res = fn(df)
-            except TypeError:
-                # บางฟังก์ชันไม่มีพารามิเตอร์ ให้ลองไม่มีอาร์กิวเมนต์
-                res = fn()
-        else:
-            # AttributeError อื่น ๆ โยนต่อ
-            raise
-    # 3) await ถ้าเป็น coroutine
+                    df = pd.DataFrame([d])
+            # normalize ชื่อคอลัมน์ยอดฮิต
+            if df is not None and hasattr(df, 'columns'):
+                colmap = {}
+                for c in list(df.columns):
+                    lc = str(c).lower()
+                    if lc == 'revenue' and c != 'Revenue':
+                        colmap[c] = 'Revenue'
+                    elif lc == 'profit' and c != 'Profit':
+                        colmap[c] = 'Profit'
+                if colmap:
+                    df = df.rename(columns=colmap)
+        except Exception:
+            df = None
+
+    import inspect, asyncio
+
+    # 1) ลอง DataFrame ก่อน ถ้ามี
+    if df is not None:
+        try:
+            res = fn(df)
+            if inspect.iscoroutine(res):
+                try:
+                    return asyncio.run(res)
+                except RuntimeError:
+                    loop = asyncio.get_event_loop()
+                    return loop.run_until_complete(res)
+            return res
+        except TypeError:
+            # ซิกเนเจอร์ไม่รับอาร์กิวเมนต์เดียว ก็ไปทางอื่นต่อ
+            pass
+
+    # 2) ลอง payload (dict) ถัดมา แล้วค่อยไม่มีอาร์กิวเมนต์
+    try:
+        res = fn(payload)
+    except TypeError:
+        res = fn()
     if inspect.iscoroutine(res):
         try:
             return asyncio.run(res)
         except RuntimeError:
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(res)
-    return res
-def run(payload=None):
+    return resdef run(payload=None):
     if payload is None: payload={}
     m = importlib.import_module("ai_margin_api.agents.standard.standard_agent")
     cands=[]
@@ -87,7 +101,7 @@ def run(payload=None):
 
     cands.sort(key=lambda x: x[3], reverse=True)
 
-    preferred=['analyze_standard','analyze_plus','analyze_premium','analyze','run','execute','process','main']
+    preferred=['analyze_standard_margin','analyze_plus_margin','analyze_premium_margin','analyze_standard','analyze_plus','analyze_premium','analyze','run','execute','process','main']
     # try preferred names first
     for pref in preferred:
         for kind, fq, entry, sc in cands:
@@ -109,4 +123,5 @@ def run(payload=None):
 
     exports=[n for n in dir(m) if not n.startswith("_")]
     return {"status":"NOOP","agent":"margin_standard","reason":"no callable found","exports":exports, "last_error":last_err}
+
 
