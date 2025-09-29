@@ -1,7 +1,11 @@
 ﻿# Universal auto-generated wrapper v3 for 'margin_standard'
 from importlib import import_module
 import pkgutil, inspect
-
+import os, sys
+_AGENT = "margin_standard"
+VENDOR_PATH = os.path.join(os.path.dirname(__file__), "_vendor", _AGENT)
+if VENDOR_PATH not in sys.path:
+    sys.path.insert(0, VENDOR_PATH)
 ROOT_PKG = "agents._vendor.margin_standard"
 HINTS = ("run","main","execute","process","analyz","analyse","compute","generate","predict","forecast","report","entry","entrypoint","standard","premium","plus","agent")
 
@@ -97,3 +101,4 @@ def run(payload=None):
     except Exception:
         exports = []
     return {"status":"NOOP","agent":"margin_standard","reason":"No callable entrypoint discovered","exports":exports}
+
