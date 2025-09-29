@@ -1,6 +1,6 @@
 ﻿# Universal auto-generated wrapper v3 for 'margin_plus'
 from importlib import import_module
-import pkgutil, inspect, asyncio
+import pkgutil, inspect, asyncio, asyncio
 import os, sys
 _AGENT = "margin_plus"
 VENDOR_PATH = os.path.join(os.path.dirname(__file__), "_vendor", _AGENT)
@@ -59,9 +59,14 @@ def _walk(root_pkg_name):
     walk(root_pkg_name)
     cand.sort(key=lambda x: x[3], reverse=True)
     return cand
-
 _CANDS = _walk(ROOT_PKG)
-
+# additionally scan top-level vendor package if present
+try:
+    import importlib
+    importlib.import_module("ai_margin_api")
+    _CANDS += _walk("ai_margin_api")
+except Exception:
+    pass
 def _call_entry(entry, payload):
     import inspect, asyncio
     def _invoke(fn, payload):
@@ -105,5 +110,6 @@ def run(payload=None):
     except Exception:
         exports = []
     return {"status":"NOOP","agent":"margin_plus","reason":"No callable entrypoint discovered","exports":exports}
+
 
 
