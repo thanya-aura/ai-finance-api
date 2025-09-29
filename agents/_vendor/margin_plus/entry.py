@@ -1,5 +1,5 @@
 ﻿# smart entry shim for 'margin_plus'
-import importlib, asyncio, inspect
+import importlib, asyncio, inspect, pandas as pd
 
 HINTS=('analyz','run','execute','process','main','compute','report','standard','plus','premium')
 
@@ -11,10 +11,39 @@ def _score(name:str)->int:
     return s
 
 def _invoke(fn, payload):
+    # 1) ลองเรียกด้วย payload เดิมก่อน
     try:
-        res = fn(payload)
-    except TypeError:
-        res = fn()
+        try:
+            res = fn(payload)
+        except TypeError:
+            res = fn()
+    except AttributeError as e:
+        msg = str(e).lower()
+        # 2) ถ้า error บอกว่าไม่มี .columns แปลว่าควรเป็น DataFrame
+        if 'columns' in msg:
+            # แปลง payload -> DataFrame ตามที่มี
+            df = None
+            if isinstance(payload, dict) and 'data' in payload:
+                try:
+                    if isinstance(payload['data'], list):
+                        df = pd.DataFrame(payload['data'])
+                    elif isinstance(payload['data'], dict):
+                        df = pd.DataFrame([payload['data']])
+                except Exception:
+                    df = None
+            if df is None:
+                # อย่างน้อยเป็น DataFrame ว่างเพื่อไม่ให้พังเรื่อง .columns
+                df = pd.DataFrame()
+            # เรียกใหม่ด้วย df
+            try:
+                res = fn(df)
+            except TypeError:
+                # บางฟังก์ชันไม่มีพารามิเตอร์ ให้ลองไม่มีอาร์กิวเมนต์
+                res = fn()
+        else:
+            # AttributeError อื่น ๆ โยนต่อ
+            raise
+    # 3) await ถ้าเป็น coroutine
     if inspect.iscoroutine(res):
         try:
             return asyncio.run(res)
@@ -22,7 +51,6 @@ def _invoke(fn, payload):
             loop = asyncio.get_event_loop()
             return loop.run_until_complete(res)
     return res
-
 def run(payload=None):
     if payload is None: payload={}
     m = importlib.import_module("ai_margin_api.agents.plus.plus_agent")
@@ -81,3 +109,4 @@ def run(payload=None):
 
     exports=[n for n in dir(m) if not n.startswith("_")]
     return {"status":"NOOP","agent":"margin_plus","reason":"no callable found","exports":exports, "last_error":last_err}
+
