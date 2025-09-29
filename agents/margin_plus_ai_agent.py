@@ -1,6 +1,6 @@
 ﻿# Universal auto-generated wrapper v3 for 'margin_plus'
 from importlib import import_module
-import pkgutil, inspect
+import pkgutil, inspect, asyncio
 import os, sys
 _AGENT = "margin_plus"
 VENDOR_PATH = os.path.join(os.path.dirname(__file__), "_vendor", _AGENT)
@@ -63,28 +63,32 @@ def _walk(root_pkg_name):
 _CANDS = _walk(ROOT_PKG)
 
 def _call_entry(entry, payload):
-    try:
-        if callable(entry):
+    import inspect, asyncio
+    def _invoke(fn, payload):
+        try:
+            res = fn(payload)
+        except TypeError:
+            res = fn()
+        if inspect.iscoroutine(res):
             try:
-                return entry(payload)
-            except TypeError:
-                return entry()
-        else:
-            inst, meth = entry  # method tuple
+                return asyncio.run(res)
+            except RuntimeError:
+                # มี event loop อยู่แล้ว
+                loop = asyncio.get_event_loop()
+                return loop.run_until_complete(res)
+        return res
+    try:
+        # tuple => (instance, method) ที่ wrapper v3 เคยส่งมา
+        if isinstance(entry, tuple):
+            inst, meth = entry
             if inst is not None:
-                try:
-                    return meth(inst, payload)
-                except TypeError:
-                    return meth(inst)
+                return _invoke(lambda p=None: meth(inst, p), payload)
             else:
-                # no instance, call unbound
-                try:
-                    return meth(payload)
-                except TypeError:
-                    return meth()
+                return _invoke(meth, payload)
+        # function ปกติ
+        return _invoke(entry, payload)
     except Exception as e:
         return {"status":"ERROR","agent":"margin_plus","error":str(e)}
-
 def run(payload=None):
     if payload is None: payload={}
     for _, fqname, entry, _ in _CANDS[:10]:  # ลองตัวเต็ง 10 อันดับแรก
@@ -101,4 +105,5 @@ def run(payload=None):
     except Exception:
         exports = []
     return {"status":"NOOP","agent":"margin_plus","reason":"No callable entrypoint discovered","exports":exports}
+
 
